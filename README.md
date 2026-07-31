@@ -71,14 +71,18 @@ nano /opt/ugreen-fan/temps.sh
 Scroll down to the **FAN CONTROL LOGIC** section and adjust the values to fit your noise/cooling preference:
 
 ```bash
-if [ "$trigger_temp" -ge 65 ]; then
-    pwm_val=255 # 100% Speed - CRITICAL
-elif [ "$trigger_temp" -ge 55 ]; then
-    pwm_val=180 # ~70% Speed - WARM
-elif [ "$trigger_temp" -ge 45 ]; then
-    pwm_val=100 # ~40% Speed - NORMAL
-else
-    pwm_val=60  # ~25% Speed - QUIET
+# 4A. CPU Fan Curve (Higher thresholds for processors)
+if [ "$cpu_temp" -ge 85 ]; then cpu_pwm=255       # 100% - Emergency
+elif [ "$cpu_temp" -ge 70 ]; then cpu_pwm=180     # ~70% - Warm
+elif [ "$cpu_temp" -ge 55 ]; then cpu_pwm=100     # ~40% - Normal
+else cpu_pwm=60                                   # ~25% - Quiet
+fi
+
+# 4B. HDD Fan Curve (Stricter thresholds to protect mechanical drives)
+if [ "$max_hdd_temp" -ge 55 ]; then hdd_pwm=255   # 100% - Emergency
+elif [ "$max_hdd_temp" -ge 50 ]; then hdd_pwm=180 # ~70% - Warm
+elif [ "$max_hdd_temp" -ge 45 ]; then hdd_pwm=100 # ~40% - Normal
+else hdd_pwm=60                                   # ~25% - Quiet
 fi
 ```
 Save the file and restart the service to apply changes: 
