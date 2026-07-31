@@ -16,7 +16,6 @@ fi
 # --- 2. CPU TEMPERATURE ---
 cpu_temp_raw=$(cat "$CPU_DIR/temp1_input" 2>/dev/null)
 cpu_temp=$((cpu_temp_raw / 1000))
-max_temp=$cpu_temp # Initialize max temperature with CPU temp
 
 # --- 3. HDD TEMPERATURES ---
 printf "%-4s %-6s %-18s %-14s %-6s %-6s\n" "BAY" "DEV" "MODEL" "SERIAL" "TEMP" "STATE"
@@ -71,29 +70,38 @@ done
 
 echo "--------------------------------------------------------------------------------"
 
-# --- 4. FAN CONTROL LOGIC ---
-# Determine the highest temperature between CPU and HDDs
-if [ "$max_hdd_temp" -gt "$cpu_temp" ]; then
+# --- 4. SEPARATE FAN CONTROL LOGIC (CPU vs HDD) ---
+
+# 4A. CPU Fan Curve (Higher thresholds for processors)
+if [ "$cpu_temp" -ge 85 ]; then cpu_pwm=255       # 100% - Emergency
+elif [ "$cpu_temp" -ge 70 ]; then cpu_pwm=180     # ~70% - Warm
+elif [ "$cpu_temp" -ge 55 ]; then cpu_pwm=100     # ~40% - Normal
+else cpu_pwm=60                                   # ~25% - Quiet
+fi
+
+# 4B. HDD Fan Curve (Stricter thresholds to protect mechanical drives)
+if [ "$max_hdd_temp" -ge 55 ]; then hdd_pwm=255   # 100% - Emergency
+elif [ "$max_hdd_temp" -ge 50 ]; then hdd_pwm=180 # ~70% - Warm
+elif [ "$max_hdd_temp" -ge 45 ]; then hdd_pwm=100 # ~40% - Normal
+else hdd_pwm=60                                   # ~25% - Quiet
+fi
+
+# 4C. Choose the highest demand between CPU and HDDs
+if [ "$hdd_pwm" -gt "$cpu_pwm" ]; then
+    pwm_val=$hdd_pwm
     trigger_temp=$max_hdd_temp
     trigger_name="HDD"
 else
+    pwm_val=$cpu_pwm
     trigger_temp=$cpu_temp
     trigger_name="CPU"
 fi
 
-# Set the fan curve (PWM ranges from 0 to 255)
-if [ "$trigger_temp" -ge 65 ]; then
-    pwm_val=255 # 100% - EMERGENCY
-    fan_state="100% (CRITICAL)"
-elif [ "$trigger_temp" -ge 55 ]; then
-    pwm_val=180 # ~70%
-    fan_state="70% (WARM)"
-elif [ "$trigger_temp" -ge 45 ]; then
-    pwm_val=100 # ~40%
-    fan_state="40% (NORMAL)"
-else
-    pwm_val=60  # ~25% - SILENT
-    fan_state="25% (QUIET)"
+# Set fan state label for reporting
+if [ "$pwm_val" -eq 255 ]; then fan_state="100% (CRITICAL)"
+elif [ "$pwm_val" -eq 180 ]; then fan_state="70% (WARM)"
+elif [ "$pwm_val" -eq 100 ]; then fan_state="40% (NORMAL)"
+else fan_state="25% (QUIET)"
 fi
 
 # Apply PWM to fans (Forcing manual mode)
